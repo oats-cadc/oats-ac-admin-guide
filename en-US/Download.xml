@@ -246,6 +246,34 @@ with the <command>.template</command> extension.
 Involved files and respective locations are described below.
 </para>
 <orderedlist>
+  <listitem>
+   <para>
+<screen>~&lt;user-launching-tomcat&gt;/.ssl/cadcproxy.pem</screen>
+To create the cadcproxy.pem file it is needed a 
+x509 user certificate released by a trusted Certification Authority 
+for authentication: mycert.crt, mykey.key</para>
+<para> A proxy can be created sing a script provided in the core
+module:
+</para>
+<screen>
+core/cadc-util/scripts/createProxyCert /path/mykey_and_cert.pem <days of validity number> cadcproxy
+</screen>
+<para>
+Where
+</para>
+<screen>
+cat mykey.key mycert.pem > mykey_and_cert.pem
+</screen>
+<para>Certificate and key must not contain bag attributes 
+and key must be no password protected. If needed, the password can 
+be removed doing:</para>
+<screen>
+openssl rsa -in mykey.pem -out mykey.pem.new
+Enter pass phrase for mykey.pem: ****************
+writing RSA key
+$> mv mykey.pem.new mykey.pem
+</screen>
+ </listitem>
  <listitem>
   <para>
    <screen>~/.dbrc file</screen>
