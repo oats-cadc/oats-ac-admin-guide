@@ -256,7 +256,7 @@ for authentication: mycert.crt, mykey.key</para>
 module:
 </para>
 <screen>
-core/cadc-util/scripts/createProxyCert /path/mykey_and_cert.pem <days of validity number> cadcproxy
+core/cadc-util/scripts/createProxyCert /path/mykey_and_cert.pem &lt;days of validity number&gt; cadcproxy
 </screen>
 <para>
 Where
