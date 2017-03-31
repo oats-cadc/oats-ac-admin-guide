@@ -1,0 +1,734 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "AC_UsersGuide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Documentation-AC_UsersGuide-ConfigureDS">
+<title>389 Directory server configuration</title>
+   <para>
+    The directory server must be configured to support SSL connection through x509 certificates and suitably initialized.
+   </para>
+   <para>
+Reference documentation:
+   </para>
+<para>
+<ulink url="https://access.redhat.com/documentation/en-US/Red_Hat_Directory_Server/10/html">Product Documentation for Red Hat Directory Server</ulink>
+</para>
+   <para>
+     <ulink url="http://directory.fedoraproject.org/docs/389ds/howto/howto-ssl.html">Configuring TLS/SSL Enabled 389 Directory Server</ulink> 
+   </para>
+   <para>
+and specifically    </para>
+   <para>
+<ulink url="http://directory.fedoraproject.org/docs/389ds/howto/howto-ssl.html#importing-an-existing-self-sign-keycert-or-3rd-party-cacert">Importing an Existing Self Sign Key/Cert or 3rd Party Ca/Cert</ulink>    </para>
+   <para>
+and    </para>
+   <para>
+<ulink url="http://directory.fedoraproject.org/docs/389ds/howto/howto-ssl.html#preparing-pinpassword-files-for-the-certificate-databases">Preparing PIN/password files for the certificate databases</ulink>.
+   </para>
+
+<section id="sec_enable_ssl">
+<title>Enable SSL support step by step</title>
+  <orderedlist>
+   <listitem>
+   <para>
+     Stop 389 ds
+   </para>
+   </listitem>
+   <listitem>
+   <para>
+     Require a x509 certificate for your server to a Certification Authority.
+   </para>
+   </listitem>
+   <listitem>
+   <para>
+     Create a .p12 version of your server certificate with empty password (press &lt;enter&gt; when password is asked): 
+   </para>
+<screen>
+openssl pkcs12 -export -inkey PRIVATE-KEY -in CERTIFICATE -out /path/crt.p12 -nodes -name ’Server-Cert’
+</screen>
+   </listitem>
+   <listitem>
+   <para>
+     Import your .p12 cert in admin-srv:
+   </para>
+<screen>
+cd /etc/dirsrv/admin-serv
+pk12util -i /path/crt.p12 -d .
+</screen>
+   </listitem>
+   <listitem>
+   <para>
+     Import the CA chain in admin-srv. If there are a root cert and intermediate certs, the process must be repeated one time for each cert.
+   </para>
+<screen>
+certutil -d /etc/dirsrv/admin-serv -A -n "My Local CA Intermediate" -t CT,, -a -i /path/CAIntermediateCert.pem
+certutil -d /etc/dirsrv/admin-serv -A -n "My Trusted Root CA Cert" -t CT,, -a -i /path/CATrustedRootCert.pem
+</screen>
+   </listitem>
+   <listitem>
+   <para>
+     Start 389 ds
+   </para>
+   </listitem>
+   <listitem>
+   <para>
+     open 389-console, open Directory Server, click on "Manage certificates". The console ask to choose a password for the certificate database, choose one (&lt;your_cert_db_password&gt;). Exit and stop 389 ds.
+   </para>
+      </listitem>
+   <listitem>
+   <para>
+Import the .p12 server cert and the ca certs in your local ds instance:
+   </para>
+<screen>
+cd /etc/dirsrv/slapd-&lt;your_local_instance&gt;
+pk12util -i /path/crt.p12 -d .
+  Enter Password or Pin for "NSS Certificate DB": &lt;your_cert_db_password&gt;
+  Enter password for PKCS12 file: &lt;empty&gt;
+  pk12util: PKCS12 IMPORT SUCCESSFUL
+certutil -d /etc/dirsrv/slapd-&lt;your_local_instance&gt; -A -n "My Local CA Intermediate" -t CT,, -a -i /path/CAIntermediateCert.pem
+certutil -d /etc/dirsrv/slapd-&lt;your_local_instance&gt; -A -n "My Trusted Root CA Cert" -t CT,, -a -i /path/CATrustedRootCert.pem
+</screen>
+   </listitem>
+   <listitem>
+   <para>
+     Edit /etc/dirsrv/admin-serv/nss.conf and change NSSPassPhraseDialog:
+   </para>
+<screen>
+NSSPassPhraseDialog  file://///etc/dirsrv/admin-serv/password.conf
+</screen>
+   </listitem>
+   <listitem>
+   <para>
+     Create /etc/dirsrv/admin-serv/password.conf:
+  </para>
+<screen>
+touch /etc/dirsrv/admin-serv/password.conf    
+chmod 600 /etc/dirsrv/admin-serv/password.conf    
+chown ldapadmin /etc/dirsrv/admin-serv/password.conf    
+</screen>
+   </listitem>
+   <listitem>
+   <para>
+Edit /etc/dirsrv/admin-serv/password.conf and place this single line in there:
+  </para>
+<screen>
+internal:&lt;your_cert_db_password&gt;    
+</screen>
+   </listitem>
+   <listitem>
+   <para>
+For your local Directory Server instance create /etc/dirsrv/slapd-&lt;your_local_instance&gt;/pin.txt (substitute slapd-&lt;your_local_instance&gt; for actual server instance’s directory name):
+  </para>
+<screen>
+touch /etc/dirsrv/slapd-&lt;your_local_instance&gt;/pin.txt    
+chmod 600 /etc/dirsrv/slapd-&lt;your_local_instance&gt;/pin.txt    
+chown ldapadmin /etc/dirsrv/slapd-&lt;your_local_instance&gt;/pin.txt    
+</screen>
+   </listitem>
+   <listitem>
+   <para>
+Edit the pin.txt file and place a single line in it (notice the difference in internal token name between this and Admin Server’s):
+  </para>
+<screen>
+Internal (Software) Token:dirserv_cert_password
+</screen>
+   </listitem>
+
+  </orderedlist>
+
+   <para>
+Restart the server to test whether it doesn’t ask for the PIN anymore and starts up properly with TLS/SSL.
+   </para>
+
+   <para> 
+Verify that certificates are correctly installed both in Directory Server and in Administration Server:
+   </para>
+
+   <para>
+Open 389-console, open Directory Server, in "Tasks" tab choose "Manage certificates". Server cert should be already installed, also CA certs should be installed but if not, choose the tab "CA certs" and install your CA certificates (root and intermediates) providing the file path using the browse option. Then open Administration Server and repeat the same steps done for Directory Server. In both cases, check that the CA certificates are trusted for each operation opening the "Edit trust" option and checking all the options available.
+   </para>
+
+   <para>
+Enable SSL and configure encryption both in Directory Server and in Administration Server:
+   </para>
+
+<para>
+In the Directory Server Window select "Configuration tab and then "Encryption" tab. Select "Enable SSL for this server", check "Use this cipher family:RSA". Leave the "Allow client authentication" checkbox checked.
+In the Admin Server Window choose "Configure Admin Server", enter in the "Encryption" tab, select "Enable SSL for this server", check "Use this cipher family:RSA". Leave the "disable client authentication" checkbox checked. 
+   </para>
+
+<para>
+Restart the server and check if SSL is correctly enabled, for example trying:
+<screen>
+ldapsearch -x -b "dc=oats,dc=inaf,dc=it" -D "cn=Directory Manager"  -Z -W
+</screen>
+</para>
+
+</section>
+
+<section id="sect-enable-SSL-troubleshooting">
+<title>Enable SSL troubleshooting</title>
+
+<para>
+If after 389-ds SSL support configuration, doing
+</para>
+<screen>
+ldapsearch -x -b "dc=oats,dc=inaf,dc=it" -D "cn=Directory Manager"  -Z -W
+</screen>
+<para>
+it appears the error:
+</para>
+<screen>
+ldap_start_tls: Connect error (-11)
+	additional info: TLS error -8172:Peer's certificate issuer has been marked as not trusted by the user.
+</screen>
+<para>
+more information about the error can be obtained doing:
+</para>
+<screen>
+ldapsearch -x -b "dc=oats,dc=inaf,dc=it" -D "cn=Directory Manager"  -Z -W -d 9
+</screen>
+<para>
+The problem can be that the Certification Authority issuing the server certificate 
+is not correctly configured and recognized client or server side.
+</para>
+<itemizedlist>
+<listitem>
+<para>
+<emphasis role="bold">Client side:</emphasis> openssl does not recognize the CA.
+It stores its trusted CA certificates in a directory configured in <command>/etc/openldap/ldap.conf</command>
+file.
+</para>
+<screen>
+# cat /etc/openldap/ldap.conf
+#
+# LDAP Defaults
+#
+
+# See ldap.conf(5) for details
+# This file should be world readable but not world writable.
+
+#BASE	dc=example,dc=com
+#URI	ldap://ldap.example.com ldap://ldap-master.example.com:666
+
+#SIZELIMIT	12
+#TIMELIMIT	15
+#DEREF		never
+
+TLS_CACERTDIR /etc/openldap/certs
+
+# Turning this off breaks GSSAPI used with krb5 when rdns = false
+SASL_NOCANON	on
+</screen>
+<para>
+The directory /etc/openldap/certs must be a directory (not a certificate
+file bundle or a keystore) 
+and contain a working certificate store including the certificate
+of the CA issuing the server certificate.
+To add the CA cert in /etc/openldap/certs copy your CA cert in there and 
+then create a symlink to it that is named after the c_hash of the cert. The
+c_hash of the cert can be calculated issuing: 
+</para>
+<screen>
+/etc/pki/tls/misc/c_hash /etc/openldap/certs/ca.crt
+</screen>
+<para>
+this will return an 8 digit hex number. A symlink called that 8 digit number.0 
+pointing to the ca.crt file must be created:
+</para> 
+<screen>
+ln -s /etc/openldap/cacerts/ca.crt /etc/openldap/cacerts/&lt;CA_cert_c_hash&gt;.0
+</screen>
+</listitem>
+<listitem>
+<para>
+<emphasis role="bold">Server side:</emphasis>
+The CA issuing the server certificate should not be correctly configuredi
+(e.g an intermediate CA cert is missed). You should add trusted certs in
+<command>/etc/dirsrv/admin-serv</command> and 
+<command>/etc/dirsrv/slapd-&lt;your_local_instance&gt;</command>
+So, check the trusted certs listing them issuing:
+</para>
+<screen>
+certutil -L -d /etc/dirsrv/admin-serv
+certutil -L -d /etc/dirsrv/slapd-&lt;your_local_instance&gt;
+</screen>
+<para>
+Be careful: the –L cannot work only with a cert8.db in a folder. It is also 
+dependent on two other files, key3.db and secmod.db. So in a folder where 
+all the above 3 files are present, -L works only there. And that’s why 
+-d parameter takes a folder path and not the cert8.db file. 
+If it is needed to add a cert:
+</para>
+<screen>
+certutil -d &lt;directory_where_add&gt; -A -n "alias_name" -t CT,, -a -i /path/CATrustedRootCert.pem
+</screen>
+<para>Where:</para>
+<itemizedlist>
+<listitem>
+<para>    "-A" command adds a certificate to the certificate database.</para>
+</listitem>
+<listitem>
+<para>    "-d .\" specifies the directory where the database, cert8.db, is located.</para>
+</listitem>
+<listitem>
+<para>    "-i /path/CACert.pem specifies the input root CA certificate file.</para>
+</listitem>
+<listitem>
+<para>    '-n 'alias_name' specifies a name for this certificate.</para>
+</listitem>
+<listitem>
+<para>    '-t "CT,,"' specifies trust arguments: "trusted CA to issue server certs" for SSL category, Trusted CA to issue client certificates (implies c) - Valid CA). No trust for email and object signing categories.</para>
+</listitem>
+</itemizedlist>
+<para>
+Useful links:
+<ulink url="http://serverfault.com/questions/437546/centos-openldap-cert-trust-issues">CentOS openLDAP cert trust issues</ulink>
+<ulink url="https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/tools/NSS_Tools_certutil">NSS Tools certutil</ulink>
+<ulink url="http://firstyear.id.au/blog/html/2014/07/10/NSS-OpenSSL_Command_How_to:_The_complete_list..html">NSS-OpenSSL Command How to: The complete list.</ulink>
+</para>
+</listitem>
+</itemizedlist>
+
+<para>
+To list all certificates in a keystore file:
+<screen>
+keytool -v -list -storepass changeit -keystore /etc/pki/java/cacerts |grep Issuer
+</screen>
+</para>
+<para>
+To list all certificates in a ca-bundle file:
+<screen>
+keytool -printcert -v -file /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+</screen>
+</para>
+
+</section>
+
+<section id="sect-modify_schema">
+<title>Modify 389 Directory Server Schema</title>
+    <para>
+   First step is to modify the ldap schema to define a custom user account, which main feature is to have a field <command>numericid</command> used by the software as a unique user identification key. To perform this modification create the subsequent file with the content below (where you substitute suitably &lt;YOUR_SERVER_NAME.FQDN&gt;, &lt;YOUR_INSTANCE_NAME&gt;):
+    </para>
+
+<screen>
+cat /etc/dirsrv/slapd-&lt;your_local_instance&gt;/schema/90canfar.ldif
+
+dn: cn=schema
+objectClass: top
+objectClass: ldapSubentry
+objectClass: subschema
+cn: schema
+aci: (target="ldap:///cn=schema")(targetattr !="aci")(version 3.0;acl "anonymous, no acis"; allow (read, search, compare) userdn = "ldap:///anyone";)
+aci: (targetattr="*")(version 3.0; acl "Configuration Administrators Group"; allow (all) groupdn="ldap:///cn=Configuration Administrators,ou=Groups,ou=TopologyManagement,o=NetscapeRoot";)
+aci: (targetattr="*")(version 3.0; acl "Configuration Administrator"; allow (all) userdn="ldap:///uid=admin,ou=Administrators,ou=TopologyManagement,o=NetscapeRoot";)
+aci: (targetattr = "*")(version 3.0; acl "SIE Group"; allow (all) groupdn = "ldap:///cn=slapd-YOUR_INSTANCE_NAME,cn=389 Directory Server,cn=Server Group,cn=YOUR_SERVER_NAME.FQDN,ou=FQDN,o=NetscapeRoot";)
+modifiersName: cn=directory manager
+objectClasses: ( cadcaccount-oid NAME 'cadcaccount' DESC '' SUP top STRUCTURAL MAY ( cn $ givenName $ sn $ address $ city $ country $ distinguishedName $ email $ institute $ numericid ) X-ORIGIN 'user defined' )
+attributeTypes: ( numericid-oid NAME 'numericid' DESC 'Intermal CADC ID (numeric)' EQUALITY numericStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.36 SINGLE-VALUE X-ORIGIN 'user defined' )
+attributeTypes: ( email-oid NAME 'email'  EQUALITY caseIgnoreMatch SUBSTR caseIgnoreOrderingMatch-default SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 X-ORIGIN 'user defined' )
+attributeTypes: ( address-oid NAME 'address'  EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringMatch-default SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 X-ORIGIN 'user defined' )
+attributeTypes: ( city-oid NAME 'city'  EQUALITY caseIgnoreMatch SUBSTR caseIgnoreOrderingMatch-default SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 X-ORIGIN 'user defined' )
+attributeTypes: ( country-oid NAME 'country'  EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringMatch-default SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 X-ORIGIN 'user defined' )
+attributeTypes: ( cadcid-oid NAME 'cadcid' DESC 'Internal  CADC ID (numeric)'EQUALITY numericStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.36 SINGLE-VALUE X-ORIGIN 'user defined' )
+attributeTypes: ( institute-oid NAME 'institute'  EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringMatch-default SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 X-ORIGIN 'user defined' )
+nsSchemaCSN: 56057cfd000000000000
+</screen> 
+
+</section>
+
+
+<section id="sect-389_console_login">
+<title>389-console log-in</title>
+
+    <para>
+Login in the directory console as 'Directory Manager'. Parameters:
+    </para>
+    <screen>
+User ID: cn=Directory Manager
+Password: ********
+Administration URL: https://&lt;YOUR_SERVER_NAME.FQDN&gt;:9830
+    </screen>
+<para>
+<mediaobject>
+<imageobject>
+  <imagedata fileref="./images/enter_389ds_as_manager.png" />
+</imageobject>
+</mediaobject>
+</para>
+
+</section>
+
+<section id="sec-enable_memberOf">
+<title>Enable MemberOf Plug-in</title>
+
+<para>
+Useful links:
+</para>
+<para>
+<ulink url="http://directory.fedoraproject.org/docs/389ds/design/memberof-auto-add-oc.html">
+MemberOf Plugin - Auto Add Objectclass,</ulink>
+</para>
+<para>
+<ulink url="https://access.redhat.com/documentation/en-US/Red_Hat_Directory_Server/8.2/html/Administration_Guide/Advanced_Entry_Management.html#groups-cmd-memberof">
+Using the memberOf Attribute to Manage Group Membership Information</ulink>
+</para>
+
+<para>
+The MemberOf Plug-in provides a way to view the groups to which a user 
+belongs simply by looking at the entry, including nested group membership.
+</para>
+<para>
+The most common people object classes — such as inetorgperson and i
+person — do not allow the memberof attribute. To allow the MemberOf Plug-in 
+to add the memberof attribute to a user entry, make sure that entry belongs 
+to the inetUser object class, which does allow the memberof attribute. 
+</para>
+<para>
+<orderedlist>
+<listitem>
+<para>
+Select the Configuration tab of "Directory Server" window, and expand to the Plugins folder.
+</para>
+</listitem>
+<listitem>
+<para>
+Scroll to the Memberof Plugin entry. 
+</para>
+<para>
+<mediaobject>
+<imageobject>
+  <imagedata fileref="./images/memberOf_plugin.png" />
+</imageobject>
+</mediaobject>
+</para>
+</listitem>
+<listitem>
+<para>
+Enable the plug-in which is disabled by default
+</para>
+<para>
+<mediaobject>
+<imageobject>
+  <imagedata fileref="./images/memberOf_plugin_enable.png" />
+</imageobject>
+</mediaobject>
+</para>
+</listitem>
+<listitem>
+<para>
+Click the Advanced button to open the Advanced Properties Editor.
+</para>
+</listitem>
+<listitem>
+<para>
+The memberofgroupattr attribute sets the attribute in the group entry 
+which the server uses to identify member entries. The memberofattr 
+attribute sets the attribute which the plug-in creates and manages 
+on user entries.
+</para>
+<para>
+Set
+</para>
+<screen>
+memberofgroupattr = uniquemember
+memeberofattr = memberOf
+</screen>
+<para>
+<mediaobject>
+<imageobject>
+  <imagedata fileref="./images/memberofgroupattr.png" />
+</imageobject>
+</mediaobject>
+</para>
+</listitem>
+<listitem>
+<para>Save the changes.</para>
+</listitem>
+<listitem>
+<para>Restart the server to update the plug-in. For example, open the 
+Tasks tab and click the Restart server task.</para> 
+</listitem>
+</orderedlist>
+</para>
+
+</section>
+
+<section id="sec-init_sync_memberof_attr">
+<title>Initializing and syncronizing memberOf attributes with fixup-memberof.pl script</title>
+
+<para>
+In case of inconsistencies between the memberOf configuration managed 
+by the server plug-in and the actual memberships defined for an entry, 
+the <command>fixup-memberof.pl</command> script can be used. This
+script launches a special clean-up task to regenerate all of the memberOf 
+attributes. It synchronizes the membership defined in group
+ntries and the corresponding user entries and overwrites any
+accidental or improper edits on the user entries.
+</para>
+<para>
+Usage:
+</para>
+<screen>
+cd /var/lib/dirsrv/slapd-&lt;your_local_instance&gt;
+fixup-memberof.pl -D "cn=Directory Manager" -w password
+</screen>
+
+</section>
+
+
+<section id="sect-create_ldap_tree">
+<title>Create LDAP tree</title>
+
+    <para>
+     Create your directory server root: 
+    </para>
+      <itemizedlist>
+       <listitem>
+         <para>
+           Go through the tree on the left side panel to reach "Directory Server", open it clicking on "open". 
+         </para>
+       </listitem>
+       <listitem>
+         <para>
+           Click on the "Configuration" tab,
+         </para> 
+       </listitem>
+       <listitem>
+         <para>
+           On the left side tree right click "Data" and choose "New Root Suffix". Input in the 'Name' field "dc=testcanfar", check "Create associated database automatically" and choose a database name (i.e. testcanfar).
+         </para>
+       </listitem>
+       <listitem>
+         <para>
+           Go to "Directory" tab.
+         </para>
+       </listitem>
+       <listitem>
+         <para>
+          In to the tree on the left side, right click on your root, choose "New Root Object", select the newly created "cn=testcanfar" and choose to create it as "domain".
+         </para>
+       </listitem>
+      </itemizedlist>
+        
+   <para>
+    Create the tree included in the newly created testcanfar root. Content to be created:
+   </para>
+   <itemizedlist>
+     <listitem>
+       <para>Organizational Units "SpecialUsers", "ds"</para>
+     </listitem>
+     <listitem>
+        <para>In "SpecialUsers" OU create a new user with "User ID" testproxy.</para>
+     </listitem>
+     <listitem>
+        <para>In "ds" OU create four other OUs:</para>
+          <simplelist>
+           <member>  
+            "Groups"
+           </member>
+           <member>  
+            "AdminGroups"
+           </member>
+           <member>  
+            "UserRequests"
+           </member>
+           <member>  
+            "Users"
+           </member>
+          </simplelist>
+     </listitem>
+   </itemizedlist>   
+   <para>
+    The procedure to create a new leaf on a tree is: right click on the root where you want to add, choose "new", choose the type of the leaf (OU, USER,...), fill the name of the unit to be created and eventually other mandatory fields.
+   </para>
+   <para>
+In "Groups" OU add a group to manageg operations,e.g. with name "cadc-ops"
+   </para>
+   <para>
+Create the root directory organizational unit the same way has been created the "testcanfar" tree: it must exist an Organizational Unit "SpecialUsers" and a "ds" subtree equals to the "ds" subtree created in "testcanfar" root. The only difference is that in "SpecialUsers" a user with User ID webproxy must be created (in place of the "testproxy" present in testcanfar-SpecialUsers).
+   </para>
+    
+</section>
+
+<section id="sect-create_admin_user">
+<title>Create your own (admin) user</title>
+    <para>
+In your tree, create in Users a user with a numeric ID and add to it your distinguished name as below.
+Create the user, clicking on the right mouse button open "Advanced properties", click on "objectclass" and push "Add value". Choose "cadcaccount". Then click on a row in the left table, push "Add attribute", choose "distinguishedname" and add your distinguished name as value.
+    </para>
+    <para>
+To know your distinguished name, you can do:
+<screen>
+openssl x509  -subject -noout -in your_personal_cert.pem
+</screen>
+    </para>
+<para>
+An object class "inetuser" must be added to the newly created user 
+the same way the "cadcaccount" object class has been added.
+</para>
+
+<para>
+At the end, the objectclass must be:
+</para>
+<itemizedlist>
+<listitem>
+<para>top</para>
+</listitem>
+<listitem>
+<para>person</para>
+</listitem>
+<listitem>
+<para>organizationalPerson</para>
+</listitem>
+<listitem>
+<para>inetorgperson</para>
+</listitem>
+<listitem>
+<para>cadcaccount</para>
+</listitem>
+<listitem>
+<para>inetuser</para>
+</listitem>
+</itemizedlist>
+
+</section>
+
+
+<section id="sect-init_ldap_tree_ACI">
+
+<title>Initialize LDAP Tree Access Control Instructions (ACI)</title>
+
+   <para>
+The configuration can be fast edited using ldapvi. 
+   </para>
+    <para>
+An example of the ACI configuration is below. 
+    </para>
+   <para>
+<screen>
+ldapvi  -D "cn=directory manager" -b dc=testcanfar "objectclass=*" aci
+
+# -*- coding: utf-8 -*-
+# http://www.lichteblau.com/ldapvi/manual#syntax
+
+0 dc=testcanfar
+aci: (targetattr != "userPassword") (version 3.0; acl "Anonymous access"; allow (read, search, compare)userdn = "ldap:///anyone";)
+aci: (targetattr != "nsroledn||aci")(version 3.0; acl "Allow self entry modification except for nsroledn and aci attributes"; allow (write)userdn ="ldap:///self";)
+aci: (targetattr = "*")(version 3.0; acl "Configuration Adminstrator"; allow (all) userdn = "ldap:///uid=admin,ou=Administrators,ou=TopologyManagement,o=NetscapeRoot";)
+aci: (targetattr ="*")(version 3.0;acl "Configuration Administrators Group";allow (all) (groupdn = "ldap:///cn=Configuration Administrators, ou=Groups, ou=TopologyManagement, o=NetscapeRoot");)
+aci: (targetattr = "*")(version 3.0; acl "SIE Group"; allow (all)groupdn = "ldap:///dc=testcanfar";)
+
+1 ou=SpecialUsers,dc=testcanfar
+
+2 ou=ds,dc=testcanfar
+aci: (targetattr = "*") (version 3.0;acl "Admin access";allow (all,moddn)(groupdn = "ldap:///cn=inaf-ops,ou=Groups,ou=ds,dc=testcanfar");)
+
+3 ou=Groups,ou=ds,dc=testcanfar
+aci: (targetattr = "*") (version 3.0;acl "Allow testproxy full access";allow (read,compare,search,write,delete,add,moddn)(userdn = "ldap:///uid=testproxy,ou=SpecialUsers,dc=testcanfar");)
+
+4 ou=AdminGroups,ou=ds,dc=testcanfar
+aci: (targetattr = "*")(version 3.0;acl "Allow testproxy full access";allow (read,compare,search,write,delete,add,moddn)(userdn = "ldap:///uid=testproxy,ou=SpecialUsers,dc=testcanfar");)
+
+5 ou=UserRequests,ou=ds,dc=testcanfar
+aci: (targetattr = "*") (version 3.0;acl "Add new user requests";allow (add)(userdn = "ldap:///uid=testproxy,ou=SpecialUsers,dc=testcanfar");)
+
+6 ou=Users,ou=ds,dc=testcanfar
+aci: (targetattr = "*") (version 3.0;acl "Allow testproxy full access to attribute of existing users";allow (read,compare,search,write,delete)(userdn = "ldap:///uid=testproxy,ou=SpecialUsers,dc=testcanfar");)
+
+7 cn=inaf-ops,ou=Groups,ou=ds,dc=testcanfar
+aci: (targetattr = "*")(version 3.0; acl "Admin access"; allow (all,moddn) groupdn=" ldap:///cn=inaf-ops,ou=groups,ou=ds,dc=canfar,dc=net";)
+
+8 uid=testproxy,ou=SpecialUsers,dc=testcanfar
+aci: (targetattr = "*") (version 3.0;acl "grant full access to testproxy";allow (all,proxy,moddn)(userdn = "ldap:///uid=testproxy,ou=SpecialUsers,dc=testcanfar");)
+</screen>
+   </para>
+
+   <para>
+<screen>
+ldapvi  -D "cn=directory manager" -b dc=oats,dc=inaf,dc=it "objectclass=*" aci
+
+# -*- coding: utf-8 -*-
+# http://www.lichteblau.com/ldapvi/manual#syntax
+
+0 dc=oats,dc=inaf,dc=it
+aci: (targetattr!="userPassword")(version 3.0; acl "Enable anonymous access"; allow (read, search, compare) userdn="ldap:///anyone";)
+aci: (targetattr="carLicense || description || displayName || facsimileTelephoneNumber || homePhone || homePostalAddress || initials || jpegPhoto || labeledURI || mail || mobile || pager || photo || postOfficeBox || postalAddress || postalCode || preferredDeliveryMethod || preferredLanguage || registeredAddress || roomNumber || secretary || seeAlso || st || street || telephoneNumber || telexNumber || title || userCertificate || userPassword || userSMIMECertificate || x500UniqueIdentifier")(version 3.0; acl "Enable self write for common attributes"; allow (write) userdn="ldap:///self";)
+aci: (targetattr ="*")(version 3.0;acl "Directory Administrators Group";allow (all) (groupdn = "ldap:///cn=Directory Administrators, dc=oats,dc=inaf,dc=it");)
+aci: (targetattr="*")(version 3.0; acl "Configuration Administrators Group"; allow (all) groupdn="ldap:///cn=Configuration Administrators,ou=Groups,ou=TopologyManagement,o=NetscapeRoot";)
+aci: (targetattr="*")(version 3.0; acl "Configuration Administrator"; allow (all) userdn="ldap:///uid=admin,ou=Administrators,ou=TopologyManagement,o=NetscapeRoot";)
+aci: (targetattr = "*")(version 3.0; acl "SIE Group"; allow (all) groupdn = "ldap:///cn=slapd-gms,cn=389 Directory Server,cn=Server Group,cn=vospace-gms.oats.inaf.it,ou=oats.inaf.it,o=NetscapeRoot";)
+
+1 cn=Directory Administrators,dc=oats,dc=inaf,dc=it
+
+2 ou=Groups,dc=oats,dc=inaf,dc=it
+
+3 ou=People,dc=oats,dc=inaf,dc=it
+aci: (targetattr ="userpassword || telephonenumber || facsimiletelephonenumber")(version 3.0;acl "Allow self entry modification";allow (write)(userdn = "ldap:///self");)
+aci: (targetattr !="cn || sn || uid")(targetfilter ="(ou=Accounting)")(version 3.0;acl "Accounting Managers Group Permissions";allow (write)(groupdn = "ldap:///cn=Accounting Managers,ou=groups,dc=oats,dc=inaf,dc=it");)
+aci: (targetattr !="cn || sn || uid")(targetfilter ="(ou=Human Resources)")(version 3.0;acl "HR Group Permissions";allow (write)(groupdn = "ldap:///cn=HR Managers,ou=groups,dc=oats,dc=inaf,dc=it");)
+aci: (targetattr !="cn ||sn || uid")(targetfilter ="(ou=Product Testing)")(version 3.0;acl "QA Group Permissions";allow (write)(groupdn = "ldap:///cn=QA Managers,ou=groups,dc=oats,dc=inaf,dc=it");)
+aci: (targetattr !="cn || sn || uid")(targetfilter ="(ou=Product Development)")(version 3.0;acl "Engineering Group Permissions";allow (write)(groupdn = "ldap:///cn=PD Managers,ou=groups,dc=oats,dc=inaf,dc=it");)
+
+4 ou=SpecialUsers,dc=oats,dc=inaf,dc=it
+
+5 cn=Accounting Managers,ou=Groups,dc=oats,dc=inaf,dc=it
+
+6 cn=HR Managers,ou=Groups,dc=oats,dc=inaf,dc=it
+
+7 cn=QA Managers,ou=Groups,dc=oats,dc=inaf,dc=it
+
+8 cn=PD Managers,ou=Groups,dc=oats,dc=inaf,dc=it
+
+9 ou=ds,dc=oats,dc=inaf,dc=it
+aci: (targetattr = "*") (version 3.0;acl "Admin access";allow (all)(groupdn = "ldap:///cn=inaf-ops,ou=Groups,ou=ds,dc=oats,dc=inaf,dc=it");)
+
+10 ou=Groups,ou=ds,dc=oats,dc=inaf,dc=it
+aci: (targetattr = "*") (version 3.0;acl "Allow webproxy full access";allow (read,compare,search,write,delete,add)(userdn = "ldap:///uid=webproxy,ou=SpecialUsers,dc=oats,dc=inaf,dc=it");)
+
+11 ou=AdminGroups,ou=ds,dc=oats,dc=inaf,dc=it
+aci: (targetattr = "*") (version 3.0;acl "Allow webproxy full access";allow (read,compare,search,write,delete,add)(userdn = "ldap:///uid=webproxy,ou=SpecialUsers,dc=oats,dc=inaf,dc=it");)
+
+12 ou=UserRequests,ou=ds,dc=oats,dc=inaf,dc=it
+aci: (targetattr = "*") (version 3.0;acl "Add new user requests";allow (add)(userdn = "ldap:///uid=webproxy,ou=SpecialUsers,dc=oats,dc=inaf,dc=it");)
+
+13 ou=Users,ou=ds,dc=oats,dc=inaf,dc=it
+aci: (targetattr = "*") (version 3.0;acl "Allow webproxy full access to attribute of existing users";allow (read,compare,search,write,delete)(userdn = "ldap:///uid=webproxy,ou=SpecialUsers,dc=oats,dc=inaf,dc=it");)
+
+14 uid=webproxy,ou=SpecialUsers,dc=oats,dc=inaf,dc=it
+aci: (targetattr = "*") (version 3.0;acl "webproxyACI";allow (all)(userdn = "ldap:///uid=webproxy,ou=SpecialUsers,dc=oats,dc=inaf,dc=it");)
+
+15 uid=1234567890,ou=Users,ou=ds,dc=oats,dc=inaf,dc=it
+
+16 cn=inaf-ops,ou=Groups,ou=ds,dc=oats,dc=inaf,dc=it
+aci: (targetattr = "*") (version 3.0;acl "admin rights";allow (all,moddn)(userdn = "ldap:///anyone");)
+
+17 uid=984024276,ou=Users,ou=ds,dc=oats,dc=inaf,dc=it
+</screen>
+   </para>
+
+</section>
+
+<section id="sect-LDAP_tree_graph"><title>Graphycal representation of the LDAP tree</title>
+<para>
+<mediaobject>
+<imageobject>
+  <imagedata fileref="./images/389-ds_tree.png" />
+</imageobject>
+</mediaobject>
+</para>
+<para>
+<mediaobject>
+<imageobject>
+  <imagedata fileref="./images/389-ds-tree-from-console.png" />
+</imageobject>
+</mediaobject>
+</para>
+
+</section>
+
+
+
+</chapter>
+

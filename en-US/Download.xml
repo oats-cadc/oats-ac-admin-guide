@@ -1,0 +1,425 @@
+<chapter id="chap-sw-repo">
+<title>The CADC Access Control Software</title>
+
+<para>The CADC (Canadian Astronomy Data Center) open source software is 
+available on a github repository: 
+</para>
+<screen>
+https://github.com/opencadc
+</screen>
+
+
+<section id="sec-ac_description">
+<title>Access Control software description</title>
+
+<para>
+The Access Control is a client and server authentication and authorization 
+implementation for user and group management.
+</para>
+<para>
+It contains four modules:
+</para>
+<orderedlist>
+<listitem>
+<para><menuchoice><guimenu>cadc-access-control</guimenu></menuchoice> : 
+Access control clients and common model objects and exceptions.</para>
+<para>
+This module contains the shared model classes and exceptions used by 
+the access control clients and server. It also contains the UserClient 
+and GMSClient (group management service client).
+</para>
+</listitem>
+<listitem>
+<para><menuchoice><guimenu>cadc-access-control-admin</guimenu></menuchoice> : 
+Administrative tool for managing users.</para>
+<para>
+This module provides a command line tool for managing users. It uses 
+the persistence layer code (rather than the web service) for the various functions.
+</para>
+</listitem>
+<listitem>
+<para><menuchoice><guimenu>cadc-access-control-server</guimenu></menuchoice> : 
+Access control web service implementation.</para>
+<para>
+It provides a RESTful interface to authentication, authorization 
+and user and group management. There are three software layers:
+</para>
+<itemizedlist>
+  <listitem>
+    <para>
+    The action classes - these coordinate the functions of the REST API
+    </para>
+  </listitem>
+  <listitem>
+    <para>
+    The persistence layer - Authorization and connection management
+    </para>
+  </listitem>
+  <listitem>
+    <para>
+    The DAO layer - interface to persistent storage
+    </para>
+  </listitem>
+</itemizedlist>
+<para>
+cadc-access-control-server has a default LDAP persistence layer built-in. 
+However, by implementating the Persistence and DAO interfaces, one can 
+easily configure this service to communicate with a different storage 
+mechanism (such as a relational database).
+</para>
+</listitem>
+<listitem>
+<para><menuchoice><guimenu>cadc-access-control-identity</guimenu></menuchoice> : 
+Access control web service client implementation to discover all the identities of a user.</para>
+<para>
+When the the cadc-access-control-identity jar file is in the classpath 
+of any of the web services offered in opencadc, it will, upon entry 
+into the web service, make a call to the cadc-access-control-server 
+service to discover all the identities of the user making the initial 
+web service call. We call this subject augmentation. These identities 
+are available for use by downstream code for puposes such as 
+authentication decisions and logging.
+</para>
+<para>
+Without the cadc-access-control-identity jar file, web services only 
+know about the identity which the user used to connect to the web 
+service (a cookie value for example). With the jar file, web service 
+will know about the other identities for the user, such as username, 
+X.509 distinguished name, and potentially various external identity 
+provider information. Additionally, this information allows services 
+to call other opencadc services as the user by making use of the 
+credential delegation service.
+</para>
+</listitem>
+<listitem>
+<para><menuchoice><guimenu>cadc-tomcat</guimenu></menuchoice> : 
+Tomcat 7 authentication realm implementation that uses the AC web service.</para>
+<para>
+This module contains two plugins for Tomcat 7:
+</para>
+<itemizedlist>
+<listitem>
+    <para>
+    A authentication realm plugin
+    </para>
+</listitem>
+<listitem>
+    <para>
+    An SSL plugin to enable x509 Client Certificates to work directly with tomcat
+    </para>
+</listitem>
+</itemizedlist>
+<para>
+This guide explains how to use the realm plugin to perform login-password access,
+but does not take into account the SSL plugin because it refers to tomcat
+native SSL support.
+</para>
+</listitem>
+</orderedlist>
+
+</section>
+
+<section id="sec-sw_download">
+<title>Build Access Control software module</title>
+
+<para>A copy of the Access Control can be obtained by:</para>
+<screen>
+git clone https://github.com/opencadc/ac
+</screen>
+<para>
+This is the main reference repository, but it is often updated and no tags are available, 
+so, a tagged/versioned repo (forked by the main) can be reached at
+</para>
+<para>
+<ulink url="http://www.ict.inaf.it/gitlab/oats-cadc-collab/gitlab/ac"></ulink>
+</para>
+<para>This guide is relative to the version tagged as v0.2.1</para>
+<para>To work with it, issue:</para>
+<screen>
+git clone https://www.ict.inaf.it/gitlab/OATS-CADC/ac.git
+git checkout tags/v0.2.1
+</screen>
+<para>or to work on a new local branch:</para>
+<screen>
+git clone https://www.ict.inaf.it/gitlab/OATS-CADC/ac.git
+git checkout tags/v0.2.1 -b &lt;branch-name&gt;
+</screen>
+<para>
+Each software module can be easily built using gradle (a build.gradle 
+file is included in each module).
+</para>
+<para>
+To build with the newer library version published in
+maven central repository, the build.gradle file must contain 
+cadc dependencies written as:
+</para>
+<screen>
+compile 'org.opencadc:cadc-log:1.+'
+</screen>
+<para>
+To build using a local build of cadc libraries, the file must contain
+cadc dependencies written as:
+</para>
+<screen>
+compile files('/&lt;local-path&gt;/core/cadc-log/build/libs/cadc-log.jar')
+</screen>
+<para>The right order to build opencadc libraries locally is:</para>
+<itemizedlist>
+<listitem>
+<screen>
+core/cadc-util
+</screen>
+</listitem>
+<listitem>
+<screen>
+core/cadc-log
+</screen>
+</listitem>
+<listitem>
+<screen>
+ac/cadc-tomcat
+</screen>
+</listitem>
+<listitem>
+<screen>
+reg/cadc-registry
+</screen>
+</listitem>
+<listitem>
+<screen>
+reg/cadc-vosi
+</screen>
+</listitem>
+<listitem>
+<screen>
+uws/cadc-uws
+</screen>
+</listitem>
+<listitem>
+<screen>
+uws/cadc-uws-server
+</screen>
+</listitem>
+<listitem>
+<screen>
+cdp/cadc-cdp
+</screen>
+</listitem>
+<listitem>
+<screen>
+cdp/cadc-cdp-server
+</screen>
+</listitem>
+<listitem>
+<screen>
+ac/cadc-access-control
+</screen>
+</listitem>
+<listitem>
+<screen>
+ac/cadc-access-control-server
+</screen>
+</listitem>
+<listitem>
+<screen>
+ac/cadc-access-control-admin
+</screen>
+</listitem>
+<listitem>
+<screen>
+ac/cadc-access-control-identity
+</screen>
+</listitem>
+</itemizedlist>
+
+</section>
+
+
+<section id="sec-AC_config">
+<title>Access Control configuration</title>
+
+<para>
+The Access Control Service must be configured conveniently 
+filling some configuration files and putting them in the expected location. 
+Some of these files are distributed in the software repository
+with the <command>.template</command> extension.
+Involved files and respective locations are described below.
+</para>
+<orderedlist>
+ <listitem>
+  <para>
+   <screen>~/.dbrc file</screen>
+A template file can be found in:
+<screen>
+ac/cadc-access-control-server/.dbrc_example
+</screen>
+This file must be located in the home directory of the user lunching tomcat 
+or the tests or using the software. A template of this file is the following:
+   <screen>
+#server proxyuser proxyUserDN password driver serverURL
+#&lt;server hostname&gt; &lt;proxyUser in LdapConfig.properties&gt; &lt;proxyUserLdapDN&gt; &lt;password&gt; N/A N/A
+   </screen>
+More than one user can be configured in this file as shown in the subsequent example:
+   <screen>
+devLdap uid=webproxy,ou=SpecialUsers,cd=inaf,dc=oats,dc=it uid=webproxy,ou=SpecialUsers,cd=inaf,dc=oats,dc=it peperone N/A N/A
+devLdap uid=testproxy,ou=SpecialUsers,dc=testcanfar uid=testproxy,ou=SpecialUsers,dc=testcanfar peperone N/A N/A
+   </screen>
+  </para>
+ </listitem>
+ <listitem>
+<para>
+ <screen>~/config/LdapConfig.properties</screen>
+ A template of this file can be found in:
+ <screen>ac/cadc-access-control-server/LdapConfig.properties</screen>
+</para>
+ <warning><para>
+Care must be taken in configuring the same server host and proxyuser in both <command>~/.dbrc</command> and <command>~/config/LdapConfig.properties</command>
+      </para>
+ </warning>
+ <note><para>
+Other copies of similar files are present in the github repository. Not all these files have to be configured. The files:
+ <screen>
+ac/cadc-access-control-server/src/test/config/testConfig1.properties
+ac/cadc-access-control-server/src/test/config/testConfig2.properties
+ </screen>
+must not be modified because they are used by the test system as they are.
+</para>
+ </note>
+  </listitem>
+  <listitem>
+   <para>
+<screen>~/config/LocalAuthority.properties</screen>
+Contains the configuration of the local authority map for User Management 
+Service (ums), Group Management Service (gms), Credential Delegation Service (cred).
+A template of this file can be found in:
+<screen> ac/cadc-access-control-server/src/test/resources/LocalAuthority.properties
+</screen>
+   </para>
+  </listitem>
+  <listitem>
+   <para>
+<screen>~/config/ac-admin-email.properties</screen>
+Contains the configuration of a mail server to be used to send a confirmation e-mail to users after registration.
+An example of this file is:
+<screen>
+cat ac/cadc-access-control-admin/config/ac-admin-email.properties
+###
+#
+# This file is used by the cadcAccessControl-Admin tool for sending
+# account approval messages to newly approved users.
+#
+# If this file is not present the admin tool will continue to function
+# but without sending an email.
+#
+# 5 fields are requried:
+#
+#    smtp.host=&lt;host&gt;             The SMTP host name.
+#    smtp.sender=&lt;email addr&gt;     The user who will send the email.
+#    smtp.replyto=&lt;reply to addr&gt; The reply to email address.
+#    mail.subject                 The subject of the email.
+#    mail.body=body               The email body.  The %s character in the
+#                                 body will be replaced with the user's
+#                                 userid (if present).  The # character in
+#                                 the body will be replaced with a
+#                                 carriage return.
+#
+# 1 field is optional:
+#
+#    smtp.bcc=&lt;bcc addr&gt;          A single bcc email address
+#
+###
+
+smtp.host=example.host
+smtp.sender=id@example.com
+smtp.replyto=id@example.com
+smtp.bcc=id@example.com
+mail.subject=New Account
+mail.body=Dear User##Your new account is %s ##Thank you
+</screen>
+   </para>
+  </listitem>
+
+  <listitem>
+   <para>
+<screen>~/config/CapabilitySource.config</screen>
+This file maps resource identifiers to the location of capability information.
+<screen>
+cat CapabilitySource.config
+#
+# This file maps resource identifiers to the location of capability
+# information.
+#
+
+ivo://cadc.nrc.ca/gms = http://www.canfar.phys.uvic.ca/ac/capabilities
+ivo://cadc.nrc.ca/ad = http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/ad/capabilities
+ivo://cadc.nrc.ca/caom2ops = http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/caom2ops/capabilities
+ivo://cadc.nrc.ca/caom2repo = http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/caom2repo/capabilities
+ivo://cadc.nrc.ca/cat = http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/cat/capabilities
+ivo://cadc.nrc.ca/cred = http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/cred/capabilities
+ivo://cadc.nrc.ca/data = http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/capabilities
+ivo://cadc.nrc.ca/proc = http://www.canfar.phys.uvic.ca/proc/capabilities
+ivo://cadc.nrc.ca/sia = http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/sia/capabilities
+ivo://cadc.nrc.ca/tap = http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/tap/capabilities
+ivo://cadc.nrc.ca/vospace = http://www.canfar.phys.uvic.ca/vospace/capabilities
+
+ivo://oats.inaf.it/gms = http://vospace-gms.oats.inaf.it/ac/capabilities
+ivo://oats.inaf.it/cred = https://vospace-gms.oats.inaf.it/cred/capabilities
+ivo://oats.inaf.it/vospace = http://vospace-gms.oats.inaf.it/vospace/capabilities
+</screen>
+   </para>
+  </listitem>
+ </orderedlist>
+
+<para>All the .properties files have to be correctly configured also in the source code tree, where existing, before to compile the code, to be included in the classpath at build time and to be found in the classpath when needed.
+</para>
+
+</section>
+
+
+<section id="sec-AC_deploy">
+<title>Access Control deployment</title>
+
+<para>
+The Access Control Service deployment package can be obtained issuing:
+</para>
+<screen>
+git clone https://www.ict.inaf.it/gitlab/OATS-CADC/oats-ac-web.git
+</screen>
+<para>
+The repository contains some files to customize: 
+</para>
+<screen>
+oats-ac-web/src/main/webapp/WEB-INF/web.xml.template
+oats-ac-web/src/main/resources/RsaSignaturePub.key.template
+oats-ac-web/src/main/resources/RsaSignaturePriv.key.template
+oats-ac-web/build.gradle.template
+</screen>
+<para>
+Each file contains comments/instructions on how to customize it,
+except build.gradle.template which can be customized, as previously 
+described, vs. maven central hosted or local libraries.
+</para>
+<para>
+The compilation produces the <command>ac.war</command> file. It
+can be deployed issuing:</para>
+<screen>
+systemctl stop tomcat
+cp ac.war $TOMCAT_HOME/webapps
+systemctl start tomcat
+</screen>
+<para>
+If some customization is done in the file contained in the deployment 
+location, be careful that the expected behavior of Tomcat is to
+treat the .war file deletion as a request to redeploy or undeploy 
+the application.  
+So, if the war file is deleted until tomcat is
+running, the application is undeployed (removed) by tomcat.
+</para>
+<para>
+If tomcat is stopped before deleting WAR file and started only 
+after that, the application will not be undeployed.
+</para>
+
+</section>
+
+</chapter>

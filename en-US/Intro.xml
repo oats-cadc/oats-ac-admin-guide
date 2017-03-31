@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "AC_admin_guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-intro">
+	<title>Introduction</title>
+
+	<para>
+		Access Control is a client and server authentication and 
+                authorization implementation for user and group management.
+	</para>
+        <para>
+                It has LDAP as default persistence layer built-ina and it provides a
+RESTful interface to authentication, authorization and user and group management.
+        </para>
+
+	<section id="sect-Requirements">
+		<title>Requirements and recomendations</title>
+                <para>
+                Prerequisites and recomendations to run the Access Control Service are: 
+                </para>
+                <itemizedlist>
+                    <listitem>
+		        <para>
+	        	Centos 7 Operative System is recommended,	
+		        </para>
+                    </listitem>
+                    <listitem>
+                        <para>
+                        A Tomcat 7 installation with SSL/TLS support enabled is required,
+                        </para>
+                    </listitem>
+                    <listitem>
+                        <para>
+                        An LDAP installation supporting the memberOf feature and secure connection
+                        is required. 389 Directory Server is recommended.
+                        </para>
+                    </listitem>
+                </itemizedlist>
+
+	</section>
+
+</chapter>
+
