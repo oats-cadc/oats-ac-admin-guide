@@ -238,6 +238,7 @@ ac/cadc-access-control-identity
 <section id="sec-AC_config">
 <title>Access Control configuration</title>
 
+
 <para>
 The Access Control Service must be configured conveniently 
 filling some configuration files and putting them in the expected location. 
@@ -246,43 +247,77 @@ with the <command>.template</command> extension.
 Involved files and respective locations are described below.
 </para>
 <orderedlist>
-  <listitem>
-   <para>
-<screen>~&lt;user-launching-tomcat&gt;/.ssl/cadcproxy.pem</screen>
-To create the cadcproxy.pem file it is needed a 
-x509 user certificate released by a trusted Certification Authority 
-for authentication: mycert.crt, mykey.key</para>
-<para> A proxy can be created sing a script provided in the core
-module:
+ <listitem>
+  <para>
+   <screen>~&lt;user-launching-tomcat&gt;/.ssl/cadcproxy.pem</screen>
+Server-side applications typically have to have valid credentials for
+the current user in order to call other services on the user's behalf.
+The standard pattern to perform this task is:
 </para>
+<itemizedlist>
+<listitem>
+<para>check user's Subject for a valid proxy certificate</para>
+</listitem>
+<listitem>
+<para>discard stored but invalid certificate</para>
+</listitem>
+<listitem>
+<para>load certificate for opierational user
+from ${user.home}/.ssl/cadcproxy.pem</para>
+</listitem>
+<listitem>
+<para>use credential client as operational user to retrieve a new proxy
+certificate for the current user</para>
+</listitem>
+<listitem>
+<para>store the user certificate in the Subject</para>
+</listitem>
+</itemizedlist>
+<para>
+This is the reason why a proxy certificate for an operational user 
+is needed in ${user.home}/.ssl/cadcproxy.pem
+</para>
+<para>
+To create the cadcproxy.pem file it is needed a
+X.509 user certificate released by a trusted Certification Authority
+for authentication: mycert.crt, mykey.key
+</para>
+<para> The proxy can be created sing a script provided in the core
+module:
 <screen>
 core/cadc-util/scripts/createProxyCert /path/mykey_and_cert.pem &lt;days of validity number&gt; cadcproxy
 </screen>
-<para>
 Where
-</para>
 <screen>
 cat mykey.key mycert.pem > mykey_and_cert.pem
 </screen>
-<para>Certificate and key must not contain bag attributes 
-and key must be no password protected. If needed, the password can 
-be removed doing:</para>
+</para>
+<para>Certificate and key must not contain bag attributes
+and key must be no password protected. If needed, the password can
+be removed doing:
 <screen>
 openssl rsa -in mykey.pem -out mykey.pem.new
 Enter pass phrase for mykey.pem: ****************
 writing RSA key
-$> mv mykey.pem.new mykey.pem
+$&gt;mv mykey.pem.new mykey.pem
 </screen>
+It is suggested to link this file also in
+<screen>
+~&lt;user-launching-tomcat&gt;/.pub/proxy.pem
+</screen>
+because some test utility uses this one.
+</para>
  </listitem>
  <listitem>
   <para>
    <screen>~/.dbrc file</screen>
-A template file can be found in:
+The bind to LDAP is done as user 'webproxy'. The webproxy credentials are 
+stored in the file named .dbrc that must exist in the home directory of the 
+user running the web service. A template file can be found in:
 <screen>
 ac/cadc-access-control-server/.dbrc_example
 </screen>
-This file must be located in the home directory of the user lunching tomcat 
-or the tests or using the software. A template of this file is the following:
+An example of this file is the following:
    <screen>
 #server proxyuser proxyUserDN password driver serverURL
 #&lt;server hostname&gt; &lt;proxyUser in LdapConfig.properties&gt; &lt;proxyUserLdapDN&gt; &lt;password&gt; N/A N/A
@@ -297,15 +332,23 @@ devLdap uid=testproxy,ou=SpecialUsers,dc=testcanfar uid=testproxy,ou=SpecialUser
  <listitem>
 <para>
  <screen>~/config/LdapConfig.properties</screen>
- A template of this file can be found in:
+There are three different connection pools to LDAP per web server:  
+one for read operations, one for write operations, and one for binding 
+as the calling user (for login and password change.)  
+All connections are made over TLS on port 636.  Pool and connection 
+information is configured in LdapConfig.properties file. It must exist 
+in the directory ~/config/ of the user running the web service.  
+A template of this file can be found in:
  <screen>ac/cadc-access-control-server/LdapConfig.properties</screen>
 </para>
  <warning><para>
-Care must be taken in configuring the same server host and proxyuser in both <command>~/.dbrc</command> and <command>~/config/LdapConfig.properties</command>
+Care must be taken in configuring the same server host and proxyuser in 
+both <command>~/.dbrc</command> and <command>~/config/LdapConfig.properties</command>
       </para>
  </warning>
  <note><para>
-Other copies of similar files are present in the github repository. Not all these files have to be configured. The files:
+Other copies of similar files are present in the github repository. Not all 
+these files have to be configured. The files:
  <screen>
 ac/cadc-access-control-server/src/test/config/testConfig1.properties
 ac/cadc-access-control-server/src/test/config/testConfig2.properties
@@ -327,7 +370,8 @@ A template of this file can be found in:
   <listitem>
    <para>
 <screen>~/config/ac-admin-email.properties</screen>
-Contains the configuration of a mail server to be used to send a confirmation e-mail to users after registration.
+Contains the configuration of a mail server to be used to send a confirmation 
+e-mail to users after registration.
 An example of this file is:
 <screen>
 cat ac/cadc-access-control-admin/config/ac-admin-email.properties
@@ -421,11 +465,17 @@ oats-ac-web/src/main/webapp/WEB-INF/web.xml.template
 oats-ac-web/src/main/resources/RsaSignaturePub.key.template
 oats-ac-web/src/main/resources/RsaSignaturePriv.key.template
 oats-ac-web/build.gradle.template
+oats-ac-web/src/main/webapp/capabilities.xml
 </screen>
 <para>
-Each file contains comments/instructions on how to customize it,
+Each template file contains comments/instructions on how to customize it,
 except build.gradle.template which can be customized, as previously 
 described, vs. maven central hosted or local libraries.
+</para>
+<para>
+The file capabilities.xml defines standards and capabilities (e.g., IVOA
+defined interfaces) provided by the service and it must be customized
+accordingly to the local service features.
 </para>
 <para>
 The compilation produces the <command>ac.war</command> file. It
